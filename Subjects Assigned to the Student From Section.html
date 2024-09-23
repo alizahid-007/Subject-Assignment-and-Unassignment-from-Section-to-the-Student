@@ -1,0 +1,627 @@
+<html><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        .dropdown-container {
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .student-checkbox {
+            margin-right: 5px;
+        }
+        #saveButton {
+            margin-top: 10px;
+            margin-left: 10px;
+            margin-bottom: 10px;
+            background-color: #742774;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        #saveButton:hover {
+            background-color: #45a049;
+        }
+        .loader {
+            border: 16px solid #f3f3f3;
+            /* Light grey */
+            border-top: 16px solid #3498db;
+            /* Blue */
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            margin-top: -60px;
+            margin-left: -60px;
+        }
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            background-color: #fffdf5;
+            vertical-align: top;
+            padding: 2px;
+        }
+        /* Sticky columns */
+        .sticky-col {
+            position: sticky;
+            left: 0;
+            background-color: white;
+            z-index: 2;
+            /* width: 170px; */
+        }
+        .table-container {
+            overflow-x: auto;
+            max-width: 100%;
+            overflow-y: auto;
+            max-height: 600px;
+            /* Assuming 10 rows will fit within this height */
+        }
+        th,
+        td {
+            padding: 8px;
+            text-align: left;
+        }
+        /* Sticky cells for table rows */
+        td.sticky-col {
+            position: sticky;
+            left: 0;
+            background-color: white;
+            z-index: 2;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+    <meta>
+    <meta>
+    <meta>
+<meta></head>
+<body style="overflow-wrap: break-word;" data-new-gr-c-s-loaded="14.1196.0" data-new-gr-c-s-check-loaded="14.1196.0" data-gr-ext-installed="" onfocusout="parent.setEmailRange();">
+    <div class="loader"></div>
+    <!-- Loader HTML -->
+    <div id="loader" style="display: none; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1000; background-color: gray;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">Loading...</span>
+        </div>
+        <div>Saving records, please wait...</div>
+    </div>
+    <button id="saveButton" class="btn btn-primary">Save</button>
+    <!-- <i id="refreshButton" class="icon-refresh" style="margin-left: 100px; color: #28a745; cursor: pointer;"></i> -->
+    <!-- <i id="refreshButton" class="fas fa-rotate-left" style="margin-left: 1500px; width: 30px; height: 30px; color: black; margin-bottom: 10px; cursor: pointer;"></i> -->
+    <!-- <input type="text" id="searchInput" onkeyup="searchStudents()" placeholder="Search for students by name.."> -->
+    <div class="table-container">
+        <div>
+                    </div><table class="table table-bordered">
+            <thead>
+                <tr id="dropdownRow" style="position: sticky; top: 0; background-color: white;">
+                        <th>Sr. No.</th>
+                        <th class="sticky-col">Registration No.
+                            &nbsp;&nbsp;
+                            <i class="fas fa-filter" onclick="toggleFilterInput('searchRegistration')"></i>
+                            <input type="text" id="searchRegistration" onkeyup="searchByRegistration()" placeholder="Search by registration number.." style="display: none;">
+                        </th>
+                        <th style="position: sticky; z-index: 2; left: 147px; background-color: white;">Students
+                            &nbsp;&nbsp;
+                            <i class="fas fa-filter" onclick="toggleFilterInput('searchInput')"></i>
+                            <input type="text" id="searchInput" onkeyup="searchStudents()" placeholder="Search for students by name.." style="display: none;">
+                        </th>
+                        <th id="subjectDropdownContainer"></th>
+                    </tr>
+                
+            </thead>
+            <tbody id="availabilityTableBody">
+                <!-- Your dynamic rows will go here -->
+            </tbody>
+        </table>
+    </div>
+    <script>
+        var subjectsToCreate = [];
+        var subjectsToDeactivate = [];
+        // document.getElementById("refreshButton").addEventListener("click", function () {
+        //     location.reload();
+        // });
+        $(document).ready(async function () {
+            $('#saveButton').on('click', function () {
+                saveChanges();
+            });
+            var section = parent.Xrm.Page.data.entity.getId();
+            if (section != null) {
+                var fetchXml = `
+                <fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='false'>
+                    <entity name='account'>
+                        <attribute name='name'/>
+                        <attribute name='accountid'/>
+                        <attribute name='mc_registrationnumber'/>
+                        <order attribute='name' descending='false'/>
+                        <filter type='and'>
+                            <condition attribute='mc_section' operator='eq' value='${section}'/>
+                            <condition attribute='statecode' operator='eq' value='0'/>
+                        </filter>
+                    </entity>
+                </fetch>`;
+                var encodedFetchXml = encodeURIComponent(fetchXml);
+                var queryUrl = `${parent.Xrm.Utility.getGlobalContext().getClientUrl()}/api/data/v9.2/accounts?fetchXml=${encodedFetchXml}`;
+                try {
+                    $(".loader").show();
+                    let data = await $.ajax({
+                        type: "GET",
+                        url: queryUrl,
+                        headers: {
+                            "OData-MaxVersion": "4.0",
+                            "OData-Version": "4.0",
+                            "Content-Type": "application/json; charset=utf-8",
+                            "Accept": "application/json"
+                        }
+                    });
+                    if (data && data.value) {
+                        populateTable(data.value);
+                        await studentSubjects(data.value);
+                    } else {
+                        displayNoResourcesMessage();
+                    }
+                } catch (error) {
+                    console.error("Error fetching students:", error);
+                } finally {
+                    $(".loader").hide();
+                }
+            }
+        });
+        function toggleFilterInput(inputId) {
+            debugger;
+            var inputField = document.getElementById(inputId);
+            if (inputField.style.display === 'none') {
+                inputField.style.display = 'block';
+            } else {
+                inputField.style.display = 'none';
+                inputField.value = '';
+                filterTableByName();
+            }
+        }
+        function searchByRegistration() {
+            var input, filter, table, tr, td, i, txtValue;
+            input = document.getElementById("searchRegistration");
+            filter = input.value.toUpperCase();
+            table = document.querySelector(".table");
+            tr = table.getElementsByTagName("tr");
+            // Loop through all table rows, and hide those that don't match the search query
+            for (i = 1; i < tr.length; i++) { // Start from 1 to skip the header row
+                td = tr[i].getElementsByTagName("td")[1]; // Get the Registration No column (index 1)
+                if (td) {
+                    txtValue = td.textContent || td.innerText;
+                    if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                        tr[i].style.display = "";
+                    } else {
+                        tr[i].style.display = "none";
+                    }
+                }
+            }
+        }
+        function searchStudents() {
+            debugger;
+            var input, filter, table, tr, td, i, txtValue;
+            input = document.getElementById("searchInput");
+            filter = input.value.toUpperCase();
+            table = document.querySelector(".table");
+            tr = table.getElementsByTagName("tr");
+            // Loop through all table rows, and hide those that don't match the search query
+            for (i = 1; i < tr.length; i++) { // Start from 1 to skip the header row
+                td = tr[i].getElementsByTagName("td")[2]; // Get the Students column (index 2)
+                if (td) {
+                    txtValue = td.textContent || td.innerText;
+                    if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                        tr[i].style.display = "";
+                    } else {
+                        tr[i].style.display = "none";
+                    }
+                }
+            }
+        }
+        async function populateTable(data) {
+            var tableBody = $("#availabilityTableBody");
+            if (data.length === 0) {
+                displayNoResourcesMessage();
+            } else {
+                let tableContent = ''; // Use a string to build HTML
+                data.forEach(function (item, index) {
+                    tableContent += `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td class="sticky-col">${item.mc_registrationnumber}</td>
+                    <td style="position: sticky; z-index: 2; left:147px; background-color: white;">${item.name}</td>
+                    <td hidden class="student-id">${item.accountid}</td>
+                </tr>`;
+                });
+                tableBody.append(tableContent); // Append the content in one go
+            }
+        }
+        async function studentSubjects(students) {
+            var program = parent.Xrm.Page.getAttribute("mc_program").getValue();
+            if (program != null) {
+                program = program[0].id;
+                var fetchXml = `
+            <fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='false'>
+                <entity name='mc_subject'>
+                    <attribute name='mc_subjectid'/>
+                    <attribute name='mc_name'/>
+                    <order attribute='mc_name' descending='false'/>
+                    <filter type='and'>
+                        <condition attribute='mc_program' operator='eq' value='${program}'/>
+                        <condition attribute='statecode' operator='eq' value='0'/>
+                    </filter>
+                </entity>
+            </fetch>`;
+                var encodedFetchXml = encodeURIComponent(fetchXml);
+                var queryUrl = `${parent.Xrm.Utility.getGlobalContext().getClientUrl()}/api/data/v9.2/mc_subjects?fetchXml=${encodedFetchXml}`;
+                try {
+                    $(".loader").show();
+                    let response = await $.ajax({
+                        type: "GET",
+                        url: queryUrl,
+                        headers: {
+                            "OData-MaxVersion": "4.0",
+                            "OData-Version": "4.0",
+                            "Content-Type": "application/json; charset=utf-8",
+                            "Accept": "application/json"
+                        }
+                    });
+                    if (response && response.value) {
+                        let assignedSubjectsByStudent = {};
+                        let remainingSubjects = response.value;
+                        let subjectMap = {};
+                        response.value.forEach(subject => {
+                            subjectMap[subject.mc_subjectid] = subject.mc_name;
+                        });
+                        let studentSubjectsPromises = students.map(student => fetchStudentClassSubjects(student.accountid));
+                        let allStudentSubjects = await Promise.all(studentSubjectsPromises);
+                        allStudentSubjects.forEach((studentSubjects, index) => {
+                            let studentId = students[index].accountid;
+                            studentSubjects.forEach(subject => {
+                                if (!assignedSubjectsByStudent[subject.mc_subjectid]) {
+                                    assignedSubjectsByStudent[subject.mc_subjectid] = {
+                                        subjectName: subjectMap[subject.mc_subjectid],
+                                        students: []
+                                    };
+                                }
+                                assignedSubjectsByStudent[subject.mc_subjectid].students.push(studentId);
+                            });
+                            remainingSubjects = remainingSubjects.filter(subject => !assignedSubjectsByStudent[subject.mc_subjectid]);
+                        });
+                        populateSubjects(remainingSubjects, assignedSubjectsByStudent);
+                    }
+                } catch (error) {
+                    console.error("Error fetching subjects:", error);
+                } finally {
+                    $(".loader").hide();
+                }
+            }
+        }
+        function fetchStudentClassSubjects(studentId) {
+            return new Promise((resolve, reject) => {
+                var fetchXml = `
+            <fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='true'>
+                <entity name='mc_subject'>
+                    <attribute name='mc_subjectid'/>
+                    <attribute name='mc_name'/>
+                    <attribute name='mc_group'/>
+                    <attribute name='mc_class'/>
+                    <order attribute='mc_name' descending='false'/>
+                    <filter type='and'>
+                        <condition attribute='statecode' operator='eq' value='0'/>
+                    </filter>
+                    <link-entity name='mc_studentclasssubject' from='mc_subject' to='mc_subjectid' link-type='inner' alias='ad'>
+                        <filter type='and'>
+                            <condition attribute='mc_student' operator='eq' uitype='account' value='${studentId}'/>
+                            <condition attribute='statecode' operator='eq' value='0'/>
+                        </filter>
+                    </link-entity>
+                </entity>
+            </fetch>`;
+                var encodedFetchXml = encodeURIComponent(fetchXml);
+                var queryUrl = `${parent.Xrm.Utility.getGlobalContext().getClientUrl()}/api/data/v9.2/mc_subjects?fetchXml=${encodedFetchXml}`;
+                $.ajax({
+                    type: "GET",
+                    url: queryUrl,
+                    headers: {
+                        "OData-MaxVersion": "4.0",
+                        "OData-Version": "4.0",
+                        "Content-Type": "application/json; charset=utf-8",
+                        "Accept": "application/json"
+                    },
+                    success: function (data) {
+                        resolve(data.value || []);
+                    },
+                    error: function (xhr, textStatus, errorThrown) {
+                        console.error("Error fetching student's class subjects:", xhr);
+                        resolve([]);
+                    }
+                });
+            });
+        }
+        function populateSubjects(subjects, assignedSubjectsByStudent) {
+            debugger;
+            var dropdownContainer = $("#subjectDropdownContainer");
+            var uniqueSubjects = subjects.map(function (subject) {
+                return {
+                    mc_name: subject.mc_name,
+                    mc_subjectid: subject.mc_subjectid
+                };
+            });
+            // Create dropdown only with unassigned subjects
+            var dropdownId = "subjectDropdown";
+            var dropdown = $('<div class="dropdown-container"><select id="' + dropdownId + '" class="form-control"><option value="">Select Subject</option></select></div>');
+            dropdownContainer.append(dropdown);
+            uniqueSubjects.forEach(function (subject) {
+                var option = $('<option value="' + subject.mc_subjectid + '">' + subject.mc_name + '</option>');
+                $("#" + dropdownId).append(option);
+            });
+            $("#" + dropdownId).on("change", function () {
+                var selectedSubjectId = $(this).val();
+                var selectedSubjectName = $(this).find("option:selected").text();
+                if (selectedSubjectId) {
+                    addSubjectColumn(selectedSubjectId, selectedSubjectName);
+                    $(this).find("option:selected").remove();
+                    $(this).val("");
+                }
+            });
+            // Now, populate existing assigned subjects as columns
+            Object.keys(assignedSubjectsByStudent).forEach(function (subjectId) {
+                var subjectName = assignedSubjectsByStudent[subjectId].subjectName;
+                addSubjectColumn(subjectId, subjectName, assignedSubjectsByStudent[subjectId].students);
+            });
+        }
+        function addSubjectColumn(subjectId, subjectName, assignedStudents = []) {
+            debugger;
+            // Create a new column header for the subject with a checkbox for select all
+            var dropdownRow = $("#dropdownRow");
+            var newColumnHeader = $('<th><input type="checkbox" class="select-all-checkbox" data-subject-id="' + subjectId + '"/>' + subjectName + '</th>');
+            newColumnHeader.insertBefore("#subjectDropdownContainer");
+            // Create checkboxes for each student under the new subject column
+            $("#availabilityTableBody tr").each(function () {
+                var studentId = $(this).find('.student-id').text();
+                var isChecked = assignedStudents.includes(studentId);
+                var checkbox = $('<input type="checkbox" class="student-checkbox" data-student-id="' + studentId + '" data-subject-id="' + subjectId + '" data-subject-name="' + subjectName + '"/>');
+                checkbox.prop('checked', isChecked);
+                var newColumnCell = $('<td></td>');
+                newColumnCell.append(checkbox);
+                newColumnCell.insertBefore($(this).find('td:last'));
+                // Attach event listener for checkbox change
+                checkbox.on('change', function () {
+                    var isChecked = $(this).is(':checked');
+                    var studentId = $(this).data('student-id');
+                    var subjectId = $(this).data('subject-id');
+                    var subjectName = $(this).data('subject-name');
+                    if (isChecked) {
+                        subjectsToCreate.push({ studentId, subjectId, subjectName });
+                        // If the subject was previously marked for deletion, remove it from the delete list
+                        subjectsToDeactivate = subjectsToDeactivate.filter(item => !(item.studentId === studentId && item.subjectId === subjectId));
+                    } else {
+                        subjectsToDeactivate.push({ studentId, subjectId });
+                        // If the subject was previously marked for creation, remove it from the create list
+                        subjectsToCreate = subjectsToCreate.filter(item => !(item.studentId === studentId && item.subjectId === subjectId));
+                        // Uncheck the select all checkbox if any student's checkbox is unchecked
+                        $(".select-all-checkbox[data-subject-id='" + subjectId + "']").prop('checked', false);
+                    }
+                });
+            });
+            // Attach event listener for select all checkbox
+            $(".select-all-checkbox[data-subject-id='" + subjectId + "']").on('change', function () {
+                var isChecked = $(this).is(':checked');
+                $(".student-checkbox[data-subject-id='" + subjectId + "']").each(function () {
+                    $(this).prop('checked', isChecked);
+                    var studentId = $(this).data('student-id');
+                    var subjectId = $(this).data('subject-id');
+                    var subjectName = $(this).data('subject-name');
+
+                    if (isChecked) {
+                        subjectsToCreate.push({ studentId, subjectId, subjectName });
+                        // If the subject was previously marked for deletion, remove it from the delete list
+                        subjectsToDeactivate = subjectsToDeactivate.filter(item => !(item.studentId === studentId && item.subjectId === subjectId));
+                    } else {
+                        subjectsToDeactivate.push({ studentId, subjectId });
+                        // If the subject was previously marked for creation, remove it from the create list
+                        subjectsToCreate = subjectsToCreate.filter(item => !(item.studentId === studentId && item.subjectId === subjectId));
+                    }
+                });
+            });
+        }
+        async function saveChanges() {
+            // Show loader
+            document.getElementById('loader').style.display = 'block';
+            alert("We are going to make Changes in Records");
+            try {
+                // Continue with the save operation
+                if (subjectsToCreate.length > 0) {
+                    await Promise.all(subjectsToCreate.map(item => createStudentClassSubject(item.studentId, item.subjectId, item.subjectName)));
+                }
+                if (subjectsToDeactivate.length > 0) {
+                    await Promise.all(subjectsToDeactivate.map(item => deactivateStudentClassSubject(item.studentId, item.subjectId)));
+                }
+                alert("Changes are Successfully Saved!");
+            }   
+            catch (error) {
+                console.error("An error occurred during the save operation:", error);
+                alert("An error occurred while saving the changes. Please try again.");
+            } finally {
+                // Hide loader
+                document.getElementById('loader').style.display = 'none';
+                // Reset arrays after saving
+                subjectsToCreate = [];
+                subjectsToDeactivate = [];
+            }
+        }
+        async function createStudentClassSubject(studentId, subjectId, subjectName) {
+            try {
+                // Step 1: Fetch the student's class (mc_studentclass)
+                const fetchXml = `
+            <fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='false'>
+                <entity name='mc_studentclass'>
+                    <attribute name='mc_studentclassid'/>
+                    <attribute name='mc_name'/>
+                    <attribute name='mc_class'/>
+                    <attribute name='mc_enrollmentdate'/>
+                    <filter type='and'>
+                        <condition attribute='mc_student' operator='eq' value='${studentId}'/>
+                        <condition attribute='statecode' operator='eq' value='0'/>
+                    </filter>
+                </entity>
+            </fetch>`;
+                const encodedFetchXml = encodeURIComponent(fetchXml);
+                const queryUrl = `${parent.Xrm.Utility.getGlobalContext().getClientUrl()}/api/data/v9.2/mc_studentclasses?fetchXml=${encodedFetchXml}`;
+                const studentClassData = await $.ajax({
+                    type: "GET",
+                    url: queryUrl,
+                    headers: {
+                        "OData-MaxVersion": "4.0",
+                        "OData-Version": "4.0",
+                        "Content-Type": "application/json; charset=utf-8",
+                        "Accept": "application/json"
+                    }
+                });
+                if (studentClassData && studentClassData.value && studentClassData.value.length > 0) {
+                    const studentClassId = studentClassData.value[0].mc_studentclassid;
+                    // Step 2: Check if the Student Class Subject already exists
+                    const checkQueryUrl = `${parent.Xrm.Utility.getGlobalContext().getClientUrl()}/api/data/v9.2/mc_studentclasssubjects?$select=mc_studentclasssubjectid&$filter=_mc_student_value eq ${studentId} and _mc_subject_value eq ${subjectId} and statecode eq 0`;
+                    const checkData = await $.ajax({
+                        type: "GET",
+                        url: checkQueryUrl,
+                        headers: {
+                            "OData-MaxVersion": "4.0",
+                            "OData-Version": "4.0",
+                            "Content-Type": "application/json; charset=utf-8",
+                            "Accept": "application/json"
+                        }
+                    });
+                    if (checkData && checkData.value && checkData.value.length > 0) {
+                        console.log("Student Class Subject record already exists and is active.");
+                    } else {
+                        // Step 3: Create the Student Class Subject with mc_studentclass lookup field
+                        const data = {
+                            "mc_name": subjectName,
+                            "mc_student@odata.bind": `/accounts(${studentId})`,
+                            "mc_subject@odata.bind": `/mc_subjects(${subjectId})`,
+                            "mc_studentclass@odata.bind": `/mc_studentclasses(${studentClassId})`,
+                            "mc_enrolmentdate": new Date().toISOString()
+                        };
+                        await $.ajax({
+                            type: "POST",
+                            url: `${parent.Xrm.Utility.getGlobalContext().getClientUrl()}/api/data/v9.2/mc_studentclasssubjects`,
+                            data: JSON.stringify(data),
+                            contentType: "application/json; charset=utf-8",
+                            headers: {
+                                "OData-MaxVersion": "4.0",
+                                "OData-Version": "4.0",
+                                "Accept": "application/json",
+                                "Prefer": "return=representation"
+                            }
+                        });
+                        console.log("Student Class Subject created successfully.");
+                    }
+                } else {
+                    console.error("No active Student Class found for the student.");
+                }
+            } catch (error) {
+                console.error("Error in creating Student Class Subject:", error);
+            }
+        }
+        async function deactivateStudentClassSubject(studentId, subjectId) {
+            try {
+                // Fetch the record to deactivate
+                const fetchXml = `
+            <fetch version='1.0' output-format='xml-platform' mapping='logical' distinct='true'>
+                <entity name='mc_studentclasssubject'>
+                    <attribute name='mc_studentclasssubjectid'/>
+                    <attribute name='statecode'/>
+                    <filter type='and'>
+                        <condition attribute='mc_student' operator='eq' uitype='account' value='${studentId}'/>
+                        <condition attribute='mc_subject' operator='eq' uitype='mc_subject' value='${subjectId}'/>
+                        <condition attribute='statecode' operator='eq' value='0'/>
+                    </filter>
+                </entity>
+            </fetch>`;
+                const encodedFetchXml = encodeURIComponent(fetchXml);
+                const queryUrl = `${parent.Xrm.Utility.getGlobalContext().getClientUrl()}/api/data/v9.2/mc_studentclasssubjects?fetchXml=${encodedFetchXml}`;
+
+                const data = await $.ajax({
+                    type: "GET",
+                    url: queryUrl,
+                    headers: {
+                        "OData-MaxVersion": "4.0",
+                        "OData-Version": "4.0",
+                        "Content-Type": "application/json; charset=utf-8",
+                        "Accept": "application/json"
+                    }
+                });
+                if (data && data.value && data.value.length > 0) {
+                    const recordId = data.value[0].mc_studentclasssubjectid;
+                    await deactivateRecord(recordId);
+                } else {
+                    console.log("No active Student Class Subject found for deactivation.");
+                }
+            } catch (error) {
+                console.error("Error fetching Student Class Subject:", error);
+            }
+        }
+        async function deactivateRecord(recordId) {
+            try {
+                const deleteUrl = `${parent.Xrm.Utility.getGlobalContext().getClientUrl()}/api/data/v9.2/mc_studentclasssubjects(${recordId})`;
+                const data = await $.ajax({
+                    type: "GET",
+                    url: deleteUrl,
+                    headers: {
+                        "OData-MaxVersion": "4.0",
+                        "OData-Version": "4.0",
+                        "Content-Type": "application/json; charset=utf-8",
+                        "Accept": "application/json"
+                    }
+                });
+                if (data.statecode !== 1) {
+                    await $.ajax({
+                        type: "PATCH",
+                        url: deleteUrl,
+                        data: JSON.stringify({ "statecode": 1, "statuscode": 124540001, "mc_dropdate": new Date().toISOString() }),
+                        contentType: "application/json; charset=utf-8",
+                        headers: {
+                            "OData-MaxVersion": "4.0",
+                            "OData-Version": "4.0",
+                            "Accept": "application/json"
+                        }
+                    });
+                    console.log("Student Class Subject status changed to inactive and drop date set to current date successfully.");
+                } else {
+                    console.log("Student Class Subject is already inactive.");
+                }
+            } catch (error) {
+                console.error("Error changing Student Class Subject status to inactive:", error);
+            }
+        }
+        function displayNoResourcesMessage() {
+            debugger;
+            var tableBody = $("#availabilityTableBody");
+            tableBody.append("<tr><td colspan='5'>No resources available</td></tr>");
+        }
+    </script>
+</body></html>
